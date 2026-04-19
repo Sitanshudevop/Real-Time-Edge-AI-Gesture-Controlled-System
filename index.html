@@ -1,0 +1,2962 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Real-Time Edge AI: Gesture-Controlled System</title>
+  <meta name="description" content="A browser-based gesture recognition system using MediaPipe Hands and TensorFlow.js. No backend, no server — runs entirely in your browser with edge AI." />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            'deep-black': '#0a0a0f',
+            'neon-blue': '#00d4ff',
+            'neon-violet': '#7c3aed',
+            'neon-pink': '#ff006e',
+            'glass': 'rgba(255,255,255,0.05)',
+            'glass-border': 'rgba(255,255,255,0.1)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+  <!-- Tone.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.7.77/build/Tone.min.js"></script>
+
+  <!-- MediaPipe Hands -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1675466862/camera_utils.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1675466124/drawing_utils.min.js"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ══════════════════════════════════════════════════════════════
+       CORE STYLES & DARK THEME
+       ══════════════════════════════════════════════════════════════ */
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-tertiary: #1a1a2e;
+      --neon-blue: #00d4ff;
+      --neon-violet: #7c3aed;
+      --neon-pink: #ff006e;
+      --neon-green: #00ff88;
+      --neon-orange: #ff8c00;
+      --text-primary: #e4e4e7;
+      --text-secondary: #a1a1aa;
+      --glass-bg: rgba(255, 255, 255, 0.04);
+      --glass-border: rgba(255, 255, 255, 0.08);
+    }
+
+    html.light {
+      --bg-primary: #f0f0f5;
+      --bg-secondary: #e8e8f0;
+      --bg-tertiary: #d8d8e5;
+      --text-primary: #1a1a2e;
+      --text-secondary: #4a4a5e;
+      --glass-bg: rgba(0, 0, 0, 0.04);
+      --glass-border: rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      overflow-x: hidden;
+      transition: background 0.5s ease, color 0.5s ease;
+      min-height: 100vh;
+    }
+
+    /* Scrollbar Styling */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(to bottom, var(--neon-blue), var(--neon-violet));
+      border-radius: 3px;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       LOADING SCREEN
+       ══════════════════════════════════════════════════════════════ */
+    #loading-screen {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: var(--bg-primary);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+    }
+
+    #loading-screen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+
+    .brain-svg {
+      width: 120px;
+      height: 120px;
+      animation: brain-pulse 2s ease-in-out infinite;
+    }
+
+    @keyframes brain-pulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 20px var(--neon-blue)); }
+      50% { transform: scale(1.1); filter: drop-shadow(0 0 40px var(--neon-violet)); }
+    }
+
+    .loading-text {
+      margin-top: 24px;
+      font-size: 1.1rem;
+      color: var(--text-secondary);
+      letter-spacing: 2px;
+      animation: text-blink 1.5s ease-in-out infinite;
+    }
+
+    .loading-bar-container {
+      width: 240px;
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      margin-top: 16px;
+      overflow: hidden;
+    }
+
+    .loading-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--neon-blue), var(--neon-violet), var(--neon-pink));
+      border-radius: 2px;
+      transition: width 0.3s ease;
+    }
+
+    @keyframes text-blink {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 1; }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       GLASSMORPHISM CARDS
+       ══════════════════════════════════════════════════════════════ */
+    .glass-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-radius: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .glass-card:hover {
+      border-color: rgba(0, 212, 255, 0.2);
+      box-shadow: 0 0 30px rgba(0, 212, 255, 0.05);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       ANIMATED GRADIENT BORDER FOR WEBCAM
+       ══════════════════════════════════════════════════════════════ */
+    .webcam-container {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+    }
+
+    .webcam-container::before {
+      content: '';
+      position: absolute;
+      inset: -2px;
+      border-radius: 18px;
+      background: linear-gradient(45deg, var(--neon-blue), var(--neon-violet), var(--neon-pink), var(--neon-blue));
+      background-size: 400% 400%;
+      animation: gradient-rotate 4s linear infinite;
+      z-index: 0;
+    }
+
+    .webcam-container > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes gradient-rotate {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       STATUS INDICATOR
+       ══════════════════════════════════════════════════════════════ */
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 6px;
+      animation: status-pulse 2s ease-in-out infinite;
+    }
+
+    .status-tracking { background: #00ff88; box-shadow: 0 0 10px #00ff88; }
+    .status-detecting { background: #ffcc00; box-shadow: 0 0 10px #ffcc00; }
+    .status-nohand { background: #ff3333; box-shadow: 0 0 10px #ff3333; }
+
+    @keyframes status-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SETTINGS DRAWER
+       ══════════════════════════════════════════════════════════════ */
+    #settings-drawer {
+      position: fixed;
+      top: 0;
+      right: -420px;
+      width: 400px;
+      max-width: 90vw;
+      height: 100vh;
+      background: var(--bg-secondary);
+      border-left: 1px solid var(--glass-border);
+      z-index: 1000;
+      transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+      overflow-y: auto;
+      padding: 24px;
+    }
+
+    #settings-drawer.open {
+      right: 0;
+      box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+    }
+
+    #settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 999;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.4s ease, visibility 0.4s ease;
+    }
+
+    #settings-overlay.open {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       BUTTONS AND FORM ELEMENTS
+       ══════════════════════════════════════════════════════════════ */
+    .btn-neon {
+      padding: 8px 20px;
+      border-radius: 10px;
+      border: 1px solid var(--neon-blue);
+      color: var(--neon-blue);
+      background: transparent;
+      font-family: 'Inter', sans-serif;
+      font-weight: 500;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-neon:hover {
+      background: rgba(0, 212, 255, 0.1);
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.2);
+      transform: translateY(-1px);
+    }
+
+    .btn-neon.active {
+      background: rgba(0, 212, 255, 0.15);
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    }
+
+    .btn-pink {
+      border-color: var(--neon-pink);
+      color: var(--neon-pink);
+    }
+
+    .btn-pink:hover {
+      background: rgba(255, 0, 110, 0.1);
+      box-shadow: 0 0 20px rgba(255, 0, 110, 0.2);
+    }
+
+    .btn-violet {
+      border-color: var(--neon-violet);
+      color: var(--neon-violet);
+    }
+
+    .btn-violet:hover {
+      background: rgba(124, 58, 237, 0.1);
+      box-shadow: 0 0 20px rgba(124, 58, 237, 0.2);
+    }
+
+    .btn-green {
+      border-color: var(--neon-green);
+      color: var(--neon-green);
+    }
+
+    .btn-green:hover {
+      background: rgba(0, 255, 136, 0.1);
+      box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
+    }
+
+    /* Toggle Switch */
+    .toggle-switch {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--bg-tertiary);
+      border-radius: 12px;
+      transition: background 0.3s ease;
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      left: 3px;
+      bottom: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.3s ease;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--neon-blue);
+    }
+
+    .toggle-switch input:checked + .toggle-slider::before {
+      transform: translateX(20px);
+    }
+
+    /* Range Slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--bg-tertiary);
+      border-radius: 2px;
+      outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      background: var(--neon-blue);
+      border-radius: 50%;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       GESTURE LOG
+       ══════════════════════════════════════════════════════════════ */
+    .gesture-log-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 12px;
+      background: var(--glass-bg);
+      border-radius: 8px;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+      border-left: 3px solid var(--neon-blue);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(-20px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CONFIDENCE BAR
+       ══════════════════════════════════════════════════════════════ */
+    .confidence-bar {
+      height: 8px;
+      background: var(--bg-tertiary);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .confidence-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--neon-blue), var(--neon-violet));
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       CONFETTI & PARTICLES (canvas-based, see JS)
+       ══════════════════════════════════════════════════════════════ */
+    #particle-canvas {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 500;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       MODAL
+       ══════════════════════════════════════════════════════════════ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.3s ease, visibility 0.3s ease;
+    }
+
+    .modal-overlay.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    .modal-content {
+      background: var(--bg-secondary);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 32px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 80vh;
+      overflow-y: auto;
+      animation: modalPop 0.3s ease;
+    }
+
+    @keyframes modalPop {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .tech-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin: 3px;
+      border: 1px solid var(--glass-border);
+      background: var(--glass-bg);
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       QUOTE DISPLAY
+       ══════════════════════════════════════════════════════════════ */
+    #quote-display {
+      position: fixed;
+      bottom: 100px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 600;
+      background: var(--bg-secondary);
+      border: 1px solid var(--neon-violet);
+      border-radius: 16px;
+      padding: 16px 24px;
+      max-width: 500px;
+      text-align: center;
+      opacity: 0;
+      visibility: hidden;
+      transition: all 0.4s ease;
+      box-shadow: 0 0 30px rgba(124, 58, 237, 0.2);
+    }
+
+    #quote-display.active {
+      opacity: 1;
+      visibility: visible;
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RESPONSIVE LAYOUT
+       ══════════════════════════════════════════════════════════════ */
+    @media (max-width: 1024px) {
+      .main-grid {
+        grid-template-columns: 1fr !important;
+      }
+      .webcam-container canvas,
+      .webcam-container video {
+        max-width: 100% !important;
+      }
+    }
+
+    @media (max-width: 640px) {
+      #settings-drawer {
+        width: 100%;
+        right: -100%;
+      }
+      .modal-content {
+        padding: 20px;
+        margin: 10px;
+      }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       MISC ANIMATIONS
+       ══════════════════════════════════════════════════════════════ */
+    .fade-in {
+      animation: fadeIn 0.5s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Notification Toast */
+    .toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 1500;
+      background: var(--bg-secondary);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 12px 20px;
+      font-size: 0.85rem;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+      animation: toastIn 0.4s ease, toastOut 0.4s ease 2.6s forwards;
+      max-width: 320px;
+    }
+
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateX(40px); }
+      to { opacity: 1; transform: translateX(0); }
+    }
+    @keyframes toastOut {
+      from { opacity: 1; transform: translateX(0); }
+      to { opacity: 0; transform: translateX(40px); }
+    }
+
+    /* Gesture visual feedback ring */
+    .gesture-ring {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 200px;
+      height: 200px;
+      border: 3px solid var(--neon-blue);
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 400;
+      opacity: 0;
+      animation: ringPulse 0.8s ease forwards;
+    }
+
+    @keyframes ringPulse {
+      0% { width: 40px; height: 40px; opacity: 1; border-width: 3px; }
+      100% { width: 200px; height: 200px; opacity: 0; border-width: 1px; }
+    }
+
+    /* Clickable Gesture Guide Items */
+    .gesture-guide-btn {
+      padding: 8px;
+      border-radius: 8px;
+      background: var(--glass-bg);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.25s ease;
+      user-select: none;
+    }
+
+    .gesture-guide-btn:hover {
+      background: rgba(0, 212, 255, 0.1);
+      border-color: var(--neon-blue);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 15px rgba(0, 212, 255, 0.15);
+    }
+
+    .gesture-guide-btn:active {
+      transform: scale(0.97);
+      box-shadow: 0 0 20px rgba(0, 212, 255, 0.25);
+    }
+
+    /* ── Thank You Easter Egg Overlay ── */
+    #thankyou-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(ellipse at center, rgba(20,0,40,0.95), rgba(5,0,15,0.98));
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+    #thankyou-overlay.active {
+      display: flex;
+      opacity: 1;
+    }
+    #thankyou-overlay .ty-title {
+      font-size: 3.5rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, #ff006e, #ff6b9d, #ff006e);
+      background-size: 200% 200%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: tyGradient 2s ease infinite;
+      margin-bottom: 12px;
+    }
+    #thankyou-overlay .ty-subtitle {
+      font-size: 1.3rem;
+      color: rgba(255,255,255,0.7);
+      margin-bottom: 32px;
+    }
+    #thankyou-overlay .ty-made {
+      font-size: 1.1rem;
+      color: rgba(255,255,255,0.5);
+      animation: tyPulse 1.5s ease infinite;
+    }
+    @keyframes tyGradient {
+      0%, 100% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+    }
+    @keyframes tyPulse {
+      0%, 100% { opacity: 0.5; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.05); }
+    }
+    .floating-heart {
+      position: fixed;
+      font-size: 1.8rem;
+      pointer-events: none;
+      z-index: 10000;
+      animation: floatUp 4s ease-out forwards;
+    }
+    @keyframes floatUp {
+      0% { opacity: 1; transform: translateY(0) scale(0.5) rotate(0deg); }
+      50% { opacity: 0.8; transform: translateY(-40vh) scale(1.2) rotate(15deg); }
+      100% { opacity: 0; transform: translateY(-90vh) scale(0.3) rotate(-10deg); }
+    }
+
+    /* ── Ball Game HUD ── */
+    #ball-game-hud {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 600;
+      display: none;
+      gap: 24px;
+      align-items: center;
+      padding: 10px 28px;
+      border-radius: 16px;
+      background: rgba(0,0,0,0.8);
+      border: 1px solid var(--neon-blue);
+      backdrop-filter: blur(12px);
+      font-size: 1rem;
+      font-weight: 700;
+    }
+    #ball-game-hud .game-score {
+      color: #00ff88;
+      font-size: 1.4rem;
+    }
+    #ball-game-hud .game-label {
+      color: rgba(255,255,255,0.6);
+      font-size: 0.75rem;
+    }
+    #ball-game-hud .game-stop {
+      padding: 6px 16px;
+      border-radius: 8px;
+      background: #ff006e;
+      color: white;
+      border: none;
+      cursor: pointer;
+      font-weight: 600;
+      transition: transform 0.2s;
+    }
+    #ball-game-hud .game-stop:hover { transform: scale(1.05); }
+  </style>
+</head>
+<body>
+
+  <!-- ══════════════════════════════════════════════════════════════
+  <!-- Thank You Easter Egg Overlay -->
+  <div id="thankyou-overlay">
+    <div class="ty-title">Thank You! 💖</div>
+    <div class="ty-subtitle">We appreciate you exploring GestureAI</div>
+    <div class="ty-made">Made with ❤️ using Edge AI</div>
+  </div>
+
+  <!-- Ball Game HUD -->
+  <div id="ball-game-hud">
+    <div><span class="game-label">SCORE</span><br><span class="game-score" id="game-score">0</span></div>
+    <div><span class="game-label">BALLS</span><br><span class="game-score" id="game-balls" style="color:#00d4ff;">0</span></div>
+    <button class="game-stop" onclick="ballGame.stop()">⏹ End Game</button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       LOADING SCREEN
+       ══════════════════════════════════════════════════════════════ -->
+  <div id="loading-screen">
+    <svg class="brain-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M50 10 C30 10 15 25 15 45 C15 60 25 70 35 75 L35 90 L65 90 L65 75 C75 70 85 60 85 45 C85 25 70 10 50 10Z"
+            stroke="url(#brainGrad)" stroke-width="2" fill="none">
+        <animate attributeName="stroke-dasharray" values="0 300;300 0" dur="2s" repeatCount="indefinite" />
+      </path>
+      <line x1="35" y1="35" x2="65" y2="35" stroke="var(--neon-blue)" stroke-width="1.5" opacity="0.6">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.5s" repeatCount="indefinite" />
+      </line>
+      <line x1="30" y1="45" x2="70" y2="45" stroke="var(--neon-violet)" stroke-width="1.5" opacity="0.6">
+        <animate attributeName="opacity" values="0.5;1;0.5" dur="1.8s" repeatCount="indefinite" />
+      </line>
+      <line x1="33" y1="55" x2="67" y2="55" stroke="var(--neon-pink)" stroke-width="1.5" opacity="0.6">
+        <animate attributeName="opacity" values="0.4;1;0.4" dur="1.3s" repeatCount="indefinite" />
+      </line>
+      <circle cx="50" cy="45" r="6" fill="none" stroke="var(--neon-blue)" stroke-width="1">
+        <animate attributeName="r" values="4;8;4" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="1;0.4;1" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <defs>
+        <linearGradient id="brainGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#00d4ff" />
+          <stop offset="50%" stop-color="#7c3aed" />
+          <stop offset="100%" stop-color="#ff006e" />
+        </linearGradient>
+      </defs>
+    </svg>
+    <div class="loading-text">INITIALIZING EDGE AI ENGINE</div>
+    <div class="loading-bar-container">
+      <div class="loading-bar" id="loading-bar"></div>
+    </div>
+    <p style="margin-top:12px;font-size:0.75rem;color:var(--text-secondary);opacity:0.6;">Loading MediaPipe Hands model...</p>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       PARTICLE OVERLAY CANVAS
+       ══════════════════════════════════════════════════════════════ -->
+  <canvas id="particle-canvas"></canvas>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       QUOTE DISPLAY
+       ══════════════════════════════════════════════════════════════ -->
+  <div id="quote-display">
+    <p id="quote-text" style="font-style:italic;color:var(--neon-violet);"></p>
+    <p id="quote-author" style="margin-top:8px;font-size:0.75rem;color:var(--text-secondary);"></p>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       SETTINGS OVERLAY + DRAWER
+       ══════════════════════════════════════════════════════════════ -->
+  <div id="settings-overlay" onclick="uiController.toggleSettings()"></div>
+  <div id="settings-drawer">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;">
+      <h2 style="font-size:1.3rem;font-weight:700;">⚙️ Settings</h2>
+      <button onclick="uiController.toggleSettings()" style="background:none;border:none;color:var(--text-primary);font-size:1.5rem;cursor:pointer;">✕</button>
+    </div>
+
+    <!-- Detection Settings -->
+    <div class="glass-card" style="padding:16px;margin-bottom:16px;">
+      <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:12px;color:var(--neon-blue);">Detection</h3>
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.8rem;">Show Landmarks</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-landmarks" checked onchange="uiController.updateSetting('showLandmarks', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.8rem;">Show Skeleton</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-skeleton" checked onchange="uiController.updateSetting('showSkeleton', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;display:block;margin-bottom:6px;">Confidence Threshold: <span id="conf-threshold-val">0.70</span></label>
+        <input type="range" id="conf-threshold" min="0.5" max="0.95" step="0.05" value="0.70" oninput="uiController.updateSetting('confidenceThreshold', parseFloat(this.value)); document.getElementById('conf-threshold-val').textContent = parseFloat(this.value).toFixed(2);">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;display:block;margin-bottom:6px;">Smoothing Factor: <span id="smooth-val">0.5</span></label>
+        <input type="range" id="smooth-factor" min="0" max="1" step="0.1" value="0.5" oninput="uiController.updateSetting('smoothing', parseFloat(this.value)); document.getElementById('smooth-val').textContent = parseFloat(this.value).toFixed(1);">
+      </div>
+    </div>
+
+    <!-- Visual Settings -->
+    <div class="glass-card" style="padding:16px;margin-bottom:16px;">
+      <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:12px;color:var(--neon-violet);">Visuals</h3>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;display:block;margin-bottom:6px;">Landmark Color</label>
+        <input type="color" id="landmark-color" value="#00d4ff" onchange="uiController.updateSetting('landmarkColor', this.value)" style="width:100%;height:32px;border:none;border-radius:8px;cursor:pointer;">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;display:block;margin-bottom:6px;">Skeleton Color</label>
+        <input type="color" id="skeleton-color" value="#7c3aed" onchange="uiController.updateSetting('skeletonColor', this.value)" style="width:100%;height:32px;border:none;border-radius:8px;cursor:pointer;">
+      </div>
+    </div>
+
+    <!-- Voice Settings -->
+    <div class="glass-card" style="padding:16px;margin-bottom:16px;">
+      <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:12px;color:var(--neon-pink);">Voice Feedback</h3>
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:0.8rem;">Enable Voice</span>
+          <label class="toggle-switch">
+            <input type="checkbox" id="toggle-voice" checked onchange="uiController.updateSetting('voiceEnabled', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;display:block;margin-bottom:6px;">Voice Speed: <span id="voice-speed-val">1.0</span></label>
+        <input type="range" id="voice-speed" min="0.5" max="2" step="0.1" value="1.0" oninput="uiController.updateSetting('voiceSpeed', parseFloat(this.value)); document.getElementById('voice-speed-val').textContent = parseFloat(this.value).toFixed(1);">
+      </div>
+      <div style="margin-bottom:12px;">
+        <label style="font-size:0.8rem;display:block;margin-bottom:6px;">Voice Pitch: <span id="voice-pitch-val">1.0</span></label>
+        <input type="range" id="voice-pitch" min="0.5" max="2" step="0.1" value="1.0" oninput="uiController.updateSetting('voicePitch', parseFloat(this.value)); document.getElementById('voice-pitch-val').textContent = parseFloat(this.value).toFixed(1);">
+      </div>
+    </div>
+
+    <!-- Gesture Customizer -->
+    <div class="glass-card" style="padding:16px;margin-bottom:16px;">
+      <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:12px;color:var(--neon-green);">Gesture Shortcuts</h3>
+      <div id="gesture-customizer"></div>
+      <button class="btn-neon btn-green" style="margin-top:8px;width:100%;" onclick="uiController.resetGestureBindings()">Reset to Defaults</button>
+    </div>
+
+    <!-- Privacy Notice -->
+    <div style="padding:12px;border-radius:12px;background:rgba(0,255,136,0.05);border:1px solid rgba(0,255,136,0.15);margin-bottom:16px;">
+      <p style="font-size:0.75rem;color:var(--neon-green);">🔒 Privacy: All processing happens locally — no video is ever uploaded or stored.</p>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       ABOUT MODAL
+       ══════════════════════════════════════════════════════════════ -->
+  <div class="modal-overlay" id="about-modal">
+    <div class="modal-content">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+        <h2 style="font-size:1.4rem;font-weight:800;">🧠 About This Project</h2>
+        <button onclick="uiController.toggleAbout()" style="background:none;border:none;color:var(--text-primary);font-size:1.5rem;cursor:pointer;">✕</button>
+      </div>
+
+      <p style="font-size:0.9rem;line-height:1.6;color:var(--text-secondary);margin-bottom:16px;">
+        This project demonstrates <strong style="color:var(--neon-blue);">Edge AI</strong> — running real machine-learning models
+        directly in your browser with zero server communication. Your webcam feed is processed locally using
+        <strong style="color:var(--neon-violet);">MediaPipe Hands</strong> to detect 21 hand landmarks in real-time,
+        which are then classified into 8+ gestures using custom geometry-based algorithms.
+      </p>
+
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:8px;">How It Works</h3>
+      <ol style="font-size:0.85rem;line-height:1.8;color:var(--text-secondary);padding-left:16px;margin-bottom:16px;">
+        <li>📷 Webcam captures frames via <code style="color:var(--neon-blue);">getUserMedia()</code></li>
+        <li>🤖 MediaPipe Hands processes each frame on-device (WASM + WebGL)</li>
+        <li>📐 21 3D landmarks per hand are extracted</li>
+        <li>🧮 Finger states and angles are computed geometrically</li>
+        <li>🏷️ Gestures are classified via rule-based logic</li>
+        <li>🎬 Actions are triggered: sounds, particles, drawing, speech, and more</li>
+      </ol>
+
+      <h3 style="font-size:1rem;font-weight:600;margin-bottom:8px;">Tech Stack</h3>
+      <div style="margin-bottom:16px;">
+        <span class="tech-badge" style="color:var(--neon-blue);border-color:var(--neon-blue);">MediaPipe Hands</span>
+        <span class="tech-badge" style="color:var(--neon-violet);border-color:var(--neon-violet);">TensorFlow.js</span>
+        <span class="tech-badge" style="color:var(--neon-pink);border-color:var(--neon-pink);">Web Speech API</span>
+        <span class="tech-badge" style="color:var(--neon-green);border-color:var(--neon-green);">Tone.js</span>
+        <span class="tech-badge" style="color:var(--neon-orange);border-color:var(--neon-orange);">Chart.js</span>
+        <span class="tech-badge" style="color:#38bdf8;border-color:#38bdf8;">Tailwind CSS</span>
+        <span class="tech-badge" style="color:#f472b6;border-color:#f472b6;">HTML5 Canvas</span>
+        <span class="tech-badge" style="color:#facc15;border-color:#facc15;">MediaRecorder API</span>
+      </div>
+
+      <div style="display:flex;gap:12px;margin-top:16px;">
+        <a href="https://github.com" target="_blank" class="btn-neon" style="text-decoration:none;display:flex;align-items:center;gap:6px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+          GitHub
+        </a>
+        <a href="https://linkedin.com" target="_blank" class="btn-neon btn-violet" style="text-decoration:none;display:flex;align-items:center;gap:6px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+          LinkedIn
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════
+       MAIN APPLICATION
+       ══════════════════════════════════════════════════════════════ -->
+  <div id="app" style="display:none;">
+    <!-- Top Navigation Bar -->
+    <nav style="padding:12px 24px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--glass-border);background:var(--glass-bg);backdrop-filter:blur(12px);position:sticky;top:0;z-index:100;">
+      <div style="display:flex;align-items:center;gap:12px;">
+        <div style="width:36px;height:36px;background:linear-gradient(135deg,var(--neon-blue),var(--neon-violet));border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;">🤖</div>
+        <div>
+          <h1 style="font-size:1rem;font-weight:700;letter-spacing:0.5px;">GestureAI <span style="color:var(--neon-blue);font-size:0.7rem;vertical-align:super;">EDGE</span></h1>
+          <p style="font-size:0.65rem;color:var(--text-secondary);margin-top:-2px;">Real-Time Hand Tracking • Browser-Only</p>
+        </div>
+      </div>
+
+      <!-- Status Indicator -->
+      <div id="status-display" style="display:flex;align-items:center;gap:8px;font-size:0.8rem;">
+        <span class="status-dot status-nohand" id="status-dot"></span>
+        <span id="status-text" style="color:var(--text-secondary);">No Hand</span>
+      </div>
+
+      <!-- Nav Buttons -->
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn-neon" id="btn-demo-mode" onclick="gestureDetector.toggleDemoMode()" title="Demo Mode">🎭 Demo</button>
+        <button class="btn-neon btn-pink" id="btn-drawing" onclick="drawingEngine.toggleDrawing()" title="Drawing Mode">🎨 Draw</button>
+        <button class="btn-neon btn-violet" id="btn-record" onclick="uiController.toggleRecording()" title="Record Session">⏺️ Record</button>
+        <button class="btn-neon" onclick="uiController.toggleAbout()" title="About">ℹ️</button>
+        <button class="btn-neon" onclick="uiController.toggleSettings()" title="Settings">⚙️</button>
+      </div>
+    </nav>
+
+    <!-- Main Content Grid -->
+    <div class="main-grid" style="display:grid;grid-template-columns:1fr 360px;gap:20px;padding:20px;max-width:1600px;margin:0 auto;">
+
+      <!-- LEFT: Webcam + Drawing Area -->
+      <div>
+        <!-- Webcam Feed -->
+        <div class="webcam-container glass-card" style="padding:3px;margin-bottom:16px;">
+          <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;">
+            <video id="webcam" autoplay playsinline style="width:100%;display:block;border-radius:14px;transform:scaleX(-1);"></video>
+            <canvas id="overlay-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:14px;"></canvas>
+            <canvas id="drawing-canvas" style="position:absolute;top:0;left:0;width:100%;height:100%;border-radius:14px;pointer-events:none;"></canvas>
+
+            <!-- Overlay UI Elements -->
+            <div style="position:absolute;top:12px;left:12px;display:flex;gap:8px;flex-wrap:wrap;z-index:10;">
+              <div class="glass-card" style="padding:4px 10px;font-size:0.7rem;font-family:'JetBrains Mono',monospace;">
+                FPS: <span id="fps-display" style="color:var(--neon-green);font-weight:600;">0</span>
+              </div>
+              <div class="glass-card" style="padding:4px 10px;font-size:0.7rem;font-family:'JetBrains Mono',monospace;" id="hand-label-display">
+                No Hand
+              </div>
+            </div>
+
+            <div style="position:absolute;top:12px;right:12px;z-index:10;">
+              <div id="drawing-indicator" class="glass-card" style="padding:4px 10px;font-size:0.7rem;display:none;border-color:var(--neon-pink);">
+                🎨 <span style="color:var(--neon-pink);">DRAWING MODE</span>
+              </div>
+            </div>
+
+            <!-- Current Gesture Display -->
+            <div style="position:absolute;bottom:12px;left:50%;transform:translateX(-50%);z-index:10;">
+              <div id="current-gesture" class="glass-card" style="padding:8px 20px;font-size:1rem;font-weight:600;text-align:center;min-width:160px;opacity:0;transition:opacity 0.3s ease;">
+                —
+              </div>
+            </div>
+
+            <!-- Recording indicator -->
+            <div id="recording-indicator" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:10;display:none;">
+              <div class="glass-card" style="padding:4px 10px;font-size:0.7rem;border-color:#ff3333;">
+                <span style="color:#ff3333;">⏺ REC</span>
+              </div>
+            </div>
+
+            <!-- Camera denied fallback -->
+            <div id="camera-denied" style="position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;background:var(--bg-primary);border-radius:14px;">
+              <p style="font-size:2rem;margin-bottom:12px;">📷</p>
+              <p style="color:var(--text-secondary);font-size:0.9rem;text-align:center;max-width:300px;">Camera access denied. Please allow camera permissions or use <strong style="color:var(--neon-blue);">Demo Mode</strong>.</p>
+              <button class="btn-neon" style="margin-top:16px;" onclick="gestureDetector.toggleDemoMode()">🎭 Enter Demo Mode</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Action Buttons Row -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          <button class="btn-neon" onclick="drawingEngine.clearCanvas()">🗑️ Clear Drawing</button>
+          <button class="btn-neon btn-violet" onclick="drawingEngine.saveDrawing()">💾 Save Drawing</button>
+          <button class="btn-neon btn-pink" onclick="uiController.takeScreenshot()">📸 Screenshot</button>
+        </div>
+
+        <!-- Gesture Guide Card — each button is clickable and fires its respective action -->
+        <div class="glass-card" style="padding:16px;">
+          <h3 style="font-size:0.9rem;font-weight:600;margin-bottom:4px;">🖐️ Gesture Guide</h3>
+          <p style="font-size:0.65rem;color:var(--text-secondary);margin-bottom:12px;">Click any gesture to trigger its action</p>
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;font-size:0.78rem;">
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Peace Sign', 1.0)" title="Take a screenshot"><span style="font-size:1.1rem;">✌️</span> <span>Peace — Screenshot</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Thumbs Up', 1.0)" title="Play success sound + confetti"><span style="font-size:1.1rem;">👍</span> <span>Thumbs Up — Success</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Fist', 1.0)" title="Pause or resume the webcam feed"><span style="font-size:1.1rem;">✊</span> <span>Fist — Pause/Resume</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Open Palm', 1.0)" title="Launch particle explosion"><span style="font-size:1.1rem;">🖐️</span> <span>Open Palm — Particles</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Pointing Up', 1.0)" title="Scroll page up"><span style="font-size:1.1rem;">👆</span> <span>Point Up — Scroll Up</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Pointing Down', 1.0)" title="Scroll page down"><span style="font-size:1.1rem;">👇</span> <span>Point Down — Scroll Down</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Call Me', 1.0)" title="Toggle dark/light theme"><span style="font-size:1.1rem;">🤙</span> <span>Call Me — Theme</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('OK Sign', 1.0)" title="Trigger confetti rain"><span style="font-size:1.1rem;">👌</span> <span>OK Sign — Confetti</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Heart Hands', 1.0)" title="Flood screen with heart particles"><span style="font-size:1.1rem;">🫆</span> <span>Heart Hands — Hearts</span></div>
+            <div class="gesture-guide-btn" onclick="gestureDetector.triggerAction('Cupped Hands', 1.0)" title="Start the ball catching game"><span style="font-size:1.1rem;">🤲</span> <span>Cupped Hands — Ball Game</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- RIGHT: Analytics Panel -->
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- Gesture Confidence -->
+        <div class="glass-card" style="padding:16px;">
+          <h3 style="font-size:0.85rem;font-weight:600;margin-bottom:10px;color:var(--neon-blue);">📊 Gesture Confidence</h3>
+          <div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:4px;">
+            <span id="conf-gesture-name">—</span>
+            <span id="conf-gesture-pct">0%</span>
+          </div>
+          <div class="confidence-bar">
+            <div class="confidence-fill" id="confidence-fill" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- Stats Cards Row -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div class="glass-card" style="padding:14px;text-align:center;">
+            <p style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:4px;">Total Gestures</p>
+            <p id="total-gestures" style="font-size:1.6rem;font-weight:800;color:var(--neon-blue);font-family:'JetBrains Mono',monospace;">0</p>
+          </div>
+          <div class="glass-card" style="padding:14px;text-align:center;">
+            <p style="font-size:0.7rem;color:var(--text-secondary);margin-bottom:4px;">Session Time</p>
+            <p id="session-time" style="font-size:1.6rem;font-weight:800;color:var(--neon-violet);font-family:'JetBrains Mono',monospace;">0:00</p>
+          </div>
+        </div>
+
+        <!-- Live Chart -->
+        <div class="glass-card" style="padding:16px;">
+          <h3 style="font-size:0.85rem;font-weight:600;margin-bottom:10px;color:var(--neon-violet);">📈 Confidence Over Time</h3>
+          <div style="height:160px;">
+            <canvas id="confidence-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- Gesture History -->
+        <div class="glass-card" style="padding:16px;flex:1;min-height:200px;max-height:350px;overflow-y:auto;">
+          <h3 style="font-size:0.85rem;font-weight:600;margin-bottom:10px;color:var(--neon-pink);">🕐 Gesture History</h3>
+          <div id="gesture-history"></div>
+          <p id="history-empty" style="font-size:0.75rem;color:var(--text-secondary);text-align:center;padding:20px 0;">No gestures detected yet</p>
+        </div>
+
+        <!-- Drawing Color Picker (shown in drawing mode) -->
+        <div class="glass-card" id="drawing-tools" style="padding:16px;display:none;">
+          <h3 style="font-size:0.85rem;font-weight:600;margin-bottom:10px;color:var(--neon-pink);">🎨 Drawing Tools</h3>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+            <button class="color-btn" onclick="drawingEngine.setColor('#ff006e')" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:#ff006e;cursor:pointer;"></button>
+            <button class="color-btn" onclick="drawingEngine.setColor('#00d4ff')" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:#00d4ff;cursor:pointer;"></button>
+            <button class="color-btn" onclick="drawingEngine.setColor('#7c3aed')" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:#7c3aed;cursor:pointer;"></button>
+            <button class="color-btn" onclick="drawingEngine.setColor('#00ff88')" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:#00ff88;cursor:pointer;"></button>
+            <button class="color-btn" onclick="drawingEngine.setColor('#ff8c00')" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:#ff8c00;cursor:pointer;"></button>
+            <button class="color-btn" onclick="drawingEngine.setColor('#ffffff')" style="width:28px;height:28px;border-radius:50%;border:2px solid var(--glass-border);background:#ffffff;cursor:pointer;"></button>
+            <button class="color-btn" onclick="drawingEngine.setColor('#facc15')" style="width:28px;height:28px;border-radius:50%;border:2px solid transparent;background:#facc15;cursor:pointer;"></button>
+          </div>
+          <div>
+            <label style="font-size:0.75rem;">Brush Size: <span id="brush-size-val">4</span></label>
+            <input type="range" min="1" max="20" value="4" oninput="drawingEngine.setBrushSize(parseInt(this.value)); document.getElementById('brush-size-val').textContent = this.value;">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <footer style="text-align:center;padding:20px;border-top:1px solid var(--glass-border);margin-top:20px;">
+      <p style="font-size:0.75rem;color:var(--text-secondary);">
+        Built with 🧠 Edge AI — <span style="color:var(--neon-blue);">MediaPipe</span> •
+        <span style="color:var(--neon-violet);">TensorFlow.js</span> •
+        <span style="color:var(--neon-pink);">Web Speech API</span>
+      </p>
+      <p style="font-size:0.7rem;color:var(--text-secondary);margin-top:4px;opacity:0.6;">
+        🔒 All processing happens locally — no video is ever uploaded or stored.
+      </p>
+      <div style="margin-top:8px;display:flex;justify-content:center;gap:12px;">
+        <a href="https://github.com" target="_blank" style="color:var(--text-secondary);transition:color 0.3s;" onmouseover="this.style.color='var(--neon-blue)'" onmouseout="this.style.color='var(--text-secondary)'">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        </a>
+        <a href="https://linkedin.com" target="_blank" style="color:var(--text-secondary);transition:color 0.3s;" onmouseover="this.style.color='var(--neon-violet)'" onmouseout="this.style.color='var(--text-secondary)'">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+        </a>
+      </div>
+    </footer>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════════════════
+       JAVASCRIPT — ALL MODULES
+       ══════════════════════════════════════════════════════════════════ -->
+  <script>
+    // ═══════════════════════════════════════════════════════════════════
+    //  CONFIGURATION & CONSTANTS
+    // ═══════════════════════════════════════════════════════════════════
+
+    const AI_QUOTES = [
+      { text: "The question of whether a computer can think is no more interesting than the question of whether a submarine can swim.", author: "Edsger Dijkstra" },
+      { text: "Artificial intelligence is the new electricity.", author: "Andrew Ng" },
+      { text: "Machine intelligence is the last invention that humanity will ever need to make.", author: "Nick Bostrom" },
+      { text: "The development of full artificial intelligence could spell the end of the human race — or its greatest triumph.", author: "Stephen Hawking" },
+      { text: "AI is likely to be either the best or worst thing to happen to humanity.", author: "Stephen Hawking" },
+      { text: "We are not going to be replaced by AI. We are going to be enhanced by AI.", author: "Ginni Rometty" },
+      { text: "By far, the greatest danger of Artificial Intelligence is that people conclude too early that they understand it.", author: "Eliezer Yudkowsky" },
+      { text: "The real question is, when will we draft an AI bill of rights?", author: "Gray Scott" },
+      { text: "It's going to be interesting to see how society deals with artificial intelligence, but it will definitely be cool.", author: "Colin Angle" },
+      { text: "Success in creating AI would be the biggest event in human history.", author: "Stephen Hawking" },
+    ];
+
+    // MediaPipe hand connections for drawing skeleton
+    const HAND_CONNECTIONS = [
+      [0,1],[1,2],[2,3],[3,4],       // Thumb
+      [0,5],[5,6],[6,7],[7,8],       // Index
+      [0,9],[9,10],[10,11],[11,12],   // Middle (connect to wrist via 5-9)
+      [0,13],[13,14],[14,15],[15,16], // Ring
+      [0,17],[17,18],[18,19],[19,20], // Pinky
+      [5,9],[9,13],[13,17]            // Palm
+    ];
+
+    // Finger tip and pip landmarks indices
+    const FINGER_TIPS = [4, 8, 12, 16, 20];   // Thumb, Index, Middle, Ring, Pinky
+    const FINGER_PIPS = [3, 6, 10, 14, 18];   // PIP joints (one below tips)
+    const FINGER_MCPS = [2, 5, 9, 13, 17];    // MCP joints
+
+    // Default gesture → action bindings
+    const DEFAULT_BINDINGS = {
+      'Peace Sign':      'screenshot',
+      'Thumbs Up':       'success',
+      'Fist':            'pause_resume',
+      'Open Palm':       'particles',
+      'Pointing Up':     'scroll_up',
+      'Pointing Down':   'scroll_down',
+      'Call Me':         'toggle_theme',
+      'OK Sign':         'confetti',
+      'Heart Hands':     'heart_flood',
+      'Cupped Hands':    'ball_game',
+    };
+
+    const ACTION_LABELS = {
+      'screenshot':    '📸 Take Screenshot',
+      'success':       '🎉 Success Sound + Confetti',
+      'pause_resume':  '⏸️ Pause/Resume Feed',
+      'particles':     '💥 Particle Explosion',
+      'scroll_up':     '👆 Scroll Page Up',
+      'scroll_down':   '👇 Scroll Page Down',
+      'toggle_theme':  '🌗 Toggle Theme',
+      'confetti':      '🎊 Confetti Rain',
+      'heart_flood':   '💕 Heart Particle Flood',
+      'ball_game':     '🎮 Ball Catching Game',
+    };
+
+    const GESTURE_EMOJIS = {
+      'Peace Sign': '✌️',
+      'Thumbs Up': '👍',
+      'Fist': '✊',
+      'Open Palm': '🖐️',
+      'Pointing Up': '👆',
+      'Pointing Down': '👇',
+      'Call Me': '🤙',
+      'OK Sign': '👌',
+      'Heart Hands': '🫆',
+      'Cupped Hands': '🤲',
+      'None': '—',
+    };
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  AUDIO FEEDBACK CLASS
+    //  Uses Tone.js for sound effects and Web Speech API for voice
+    // ═══════════════════════════════════════════════════════════════════
+
+    class AudioFeedback {
+      constructor() {
+        this.voiceEnabled = false;
+        this.voiceSpeed = 1.0;
+        this.voicePitch = 1.0;
+        this.synth = window.speechSynthesis;
+        this.lastSpoke = 0;
+        this.speakCooldown = 2000; // ms between voice utterances
+        this.toneReady = false;
+      }
+
+      /** Initialize Tone.js audio context on first user interaction */
+      async initTone() {
+        if (this.toneReady) return;
+        try {
+          await Tone.start();
+          this.toneReady = true;
+        } catch (e) {
+          console.warn('Tone.js init failed:', e);
+        }
+      }
+
+      /** Speak the gesture name aloud using Web Speech API */
+      speak(text) {
+        if (!this.voiceEnabled) return;
+        const now = Date.now();
+        if (now - this.lastSpoke < this.speakCooldown) return;
+        this.lastSpoke = now;
+
+        // Cancel any ongoing speech
+        this.synth.cancel();
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = this.voiceSpeed;
+        utterance.pitch = this.voicePitch;
+        utterance.volume = 0.8;
+        this.synth.speak(utterance);
+      }
+
+      /** Play a success chime using Tone.js */
+      playSuccess() {
+        if (!this.toneReady) return;
+        try {
+          const synth = new Tone.PolySynth(Tone.Synth).toDestination();
+          synth.volume.value = -12;
+          synth.triggerAttackRelease(["C5", "E5", "G5"], "8n");
+          setTimeout(() => synth.dispose(), 1000);
+        } catch (e) { /* ignore */ }
+      }
+
+      /** Play a click/action sound */
+      playClick() {
+        if (!this.toneReady) return;
+        try {
+          const synth = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.1, sustain: 0, release: 0.1 } }).toDestination();
+          synth.volume.value = -18;
+          synth.triggerAttackRelease("A5", "32n");
+          setTimeout(() => synth.dispose(), 500);
+        } catch (e) { /* ignore */ }
+      }
+
+      /** Play a particle burst sound */
+      playBurst() {
+        if (!this.toneReady) return;
+        try {
+          const noise = new Tone.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0 } }).toDestination();
+          noise.volume.value = -20;
+          noise.triggerAttackRelease("16n");
+          setTimeout(() => noise.dispose(), 500);
+        } catch (e) { /* ignore */ }
+      }
+
+      /** Play a theme toggle sound */
+      playToggle() {
+        if (!this.toneReady) return;
+        try {
+          const synth = new Tone.Synth({ oscillator: { type: 'triangle' } }).toDestination();
+          synth.volume.value = -15;
+          synth.triggerAttackRelease("D5", "16n");
+          setTimeout(() => {
+            synth.triggerAttackRelease("G5", "16n");
+          }, 100);
+          setTimeout(() => synth.dispose(), 700);
+        } catch (e) { /* ignore */ }
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  PARTICLE SYSTEM CLASS
+    //  Canvas-based particle system for confetti, explosions, sparkles
+    // ═══════════════════════════════════════════════════════════════════
+
+    class ParticleSystem {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.particles = [];
+        this.running = false;
+        this.resize();
+        window.addEventListener('resize', () => this.resize());
+      }
+
+      resize() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+      }
+
+      /** Start the animation loop if not already running */
+      startLoop() {
+        if (this.running) return;
+        this.running = true;
+        this._animate();
+      }
+
+      _animate() {
+        if (!this.running) return;
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Update and draw particles
+        for (let i = this.particles.length - 1; i >= 0; i--) {
+          const p = this.particles[i];
+          p.x += p.vx;
+          p.y += p.vy;
+          p.vy += p.gravity;
+          p.life -= p.decay;
+          p.rotation += p.rotationSpeed || 0;
+
+          if (p.life <= 0) {
+            this.particles.splice(i, 1);
+            continue;
+          }
+
+          this.ctx.save();
+          this.ctx.globalAlpha = Math.max(0, p.life);
+          this.ctx.translate(p.x, p.y);
+          this.ctx.rotate(p.rotation || 0);
+
+          if (p.type === 'confetti') {
+            this.ctx.fillStyle = p.color;
+            this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+          } else if (p.type === 'heart') {
+            // Draw a heart shape
+            this.ctx.fillStyle = p.color;
+            const s = p.size;
+            this.ctx.beginPath();
+            this.ctx.moveTo(0, s * 0.3);
+            this.ctx.bezierCurveTo(-s, -s * 0.3, -s * 0.5, -s, 0, -s * 0.4);
+            this.ctx.bezierCurveTo(s * 0.5, -s, s, -s * 0.3, 0, s * 0.3);
+            this.ctx.fill();
+          } else if (p.type === 'sparkle') {
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+          } else {
+            // Default circle particle
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(0, 0, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+          }
+
+          this.ctx.restore();
+        }
+
+        if (this.particles.length === 0) {
+          this.running = false;
+          return;
+        }
+
+        requestAnimationFrame(() => this._animate());
+      }
+
+      /** Trigger a confetti rain from the top */
+      confettiRain(count = 120) {
+        const colors = ['#00d4ff', '#7c3aed', '#ff006e', '#00ff88', '#ff8c00', '#facc15', '#38bdf8', '#f472b6'];
+        for (let i = 0; i < count; i++) {
+          this.particles.push({
+            x: Math.random() * this.canvas.width,
+            y: -20 - Math.random() * 100,
+            vx: (Math.random() - 0.5) * 4,
+            vy: Math.random() * 3 + 2,
+            gravity: 0.05,
+            size: Math.random() * 8 + 4,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            life: 1,
+            decay: 0.005 + Math.random() * 0.005,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.15,
+            type: 'confetti'
+          });
+        }
+        this.startLoop();
+      }
+
+      /** Trigger a particle explosion from center of screen */
+      explosion(x, y, count = 80) {
+        if (x === undefined) x = this.canvas.width / 2;
+        if (y === undefined) y = this.canvas.height / 2;
+        const colors = ['#00d4ff', '#7c3aed', '#ff006e', '#00ff88'];
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 8 + 2;
+          this.particles.push({
+            x: x,
+            y: y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            gravity: 0.1,
+            size: Math.random() * 4 + 1,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            life: 1,
+            decay: 0.015 + Math.random() * 0.01,
+            type: 'sparkle'
+          });
+        }
+        this.startLoop();
+      }
+
+      /** Sparkle burst for gesture feedback */
+      sparkleBurst(x, y, color = '#00d4ff', count = 30) {
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * 5 + 1;
+          this.particles.push({
+            x: x || this.canvas.width / 2,
+            y: y || this.canvas.height / 2,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            gravity: 0.05,
+            size: Math.random() * 3 + 1,
+            color: color,
+            life: 1,
+            decay: 0.02 + Math.random() * 0.02,
+            type: 'sparkle'
+          });
+        }
+        this.startLoop();
+      }
+
+      /** Flood the screen with 200+ heart particles in pink/red palette with physics bounce */
+      heartFlood(count = 220) {
+        const colors = ['#ff006e', '#ff3366', '#ff6b9d', '#ff1744', '#e91e63', '#f44336', '#ff5252', '#ff80ab', '#f06292', '#ec407a'];
+        for (let i = 0; i < count; i++) {
+          this.particles.push({
+            x: Math.random() * this.canvas.width,
+            y: -20 - Math.random() * 200,
+            vx: (Math.random() - 0.5) * 3,
+            vy: Math.random() * 4 + 1,
+            gravity: 0.04,
+            size: Math.random() * 10 + 6,
+            color: colors[Math.floor(Math.random() * colors.length)],
+            life: 1,
+            decay: 0.003 + Math.random() * 0.004,
+            rotation: Math.random() * Math.PI * 2,
+            rotationSpeed: (Math.random() - 0.5) * 0.1,
+            type: 'heart',
+            bounce: true
+          });
+        }
+        this.startLoop();
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  BALL GAME CLASS
+    //  Interactive ball-catching physics mini-game triggered by Cupped Hands
+    // ═══════════════════════════════════════════════════════════════════
+
+    class BallGame {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.running = false;
+        this.score = 0;
+        this.totalBalls = 0;
+        this.balls = [];
+        this.paddle = { lx: 300, rx: 500, y: 400, visible: false };
+        this.spawnInterval = null;
+        this.animFrame = null;
+      }
+
+      /** Start the ball game */
+      start() {
+        this.running = true;
+        this.score = 0;
+        this.totalBalls = 0;
+        this.balls = [];
+        this.paddle.visible = false;
+        document.getElementById('game-score').textContent = '0';
+        document.getElementById('game-balls').textContent = '0';
+        document.getElementById('ball-game-hud').style.display = 'flex';
+
+        // Spawn a ball every 600ms
+        this.spawnInterval = setInterval(() => this.spawnBall(), 600);
+        this._gameLoop();
+      }
+
+      /** Stop the ball game */
+      stop() {
+        this.running = false;
+        clearInterval(this.spawnInterval);
+        cancelAnimationFrame(this.animFrame);
+        this.balls = [];
+        document.getElementById('ball-game-hud').style.display = 'none';
+        // Clear game drawings from particle canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        if (uiController) {
+          uiController.showToast(`🎮 Game Over! Score: ${this.score}/${this.totalBalls}`);
+        }
+      }
+
+      /** Spawn a new falling ball */
+      spawnBall() {
+        if (!this.running) return;
+        this.totalBalls++;
+        document.getElementById('game-balls').textContent = this.totalBalls;
+        const colors = ['#00d4ff', '#ff006e', '#00ff88', '#facc15', '#7c3aed', '#ff8c00', '#38bdf8'];
+        this.balls.push({
+          x: 60 + Math.random() * (this.canvas.width - 120),
+          y: -20,
+          r: 12 + Math.random() * 8,
+          vy: 2 + Math.random() * 2,
+          vx: (Math.random() - 0.5) * 2,
+          color: colors[Math.floor(Math.random() * colors.length)],
+          caught: false,
+          missed: false
+        });
+      }
+
+      /** Update paddle position from cupped hands detection */
+      updatePaddle(lx, rx, y) {
+        this.paddle.lx = lx;
+        this.paddle.rx = rx;
+        this.paddle.y = y;
+        this.paddle.visible = true;
+      }
+
+      /** Main game loop */
+      _gameLoop() {
+        if (!this.running) return;
+
+        // Don't clear the whole canvas; the particle system manages 
+        // its own rendering. We draw game elements on top.
+        // Actually, since we share the canvas, let the particle system handle clearing.
+        // We'll draw in a separate pass.
+
+        const ctx = this.ctx;
+        const cw = this.canvas.width;
+        const ch = this.canvas.height;
+
+        // Update and draw balls
+        for (let i = this.balls.length - 1; i >= 0; i--) {
+          const b = this.balls[i];
+          if (b.caught || b.missed) {
+            this.balls.splice(i, 1);
+            continue;
+          }
+
+          b.y += b.vy;
+          b.x += b.vx;
+          b.vy += 0.08; // gravity
+
+          // Bounce off side walls
+          if (b.x - b.r < 0 || b.x + b.r > cw) b.vx *= -1;
+
+          // Check if caught by paddle
+          if (this.paddle.visible && b.y + b.r >= this.paddle.y - 15 && b.y + b.r <= this.paddle.y + 25) {
+            if (b.x >= this.paddle.lx - 10 && b.x <= this.paddle.rx + 10) {
+              b.caught = true;
+              this.score++;
+              document.getElementById('game-score').textContent = this.score;
+              // Sparkle effect at catch point
+              particleSystem.sparkleBurst(b.x, b.y, b.color, 15);
+              continue;
+            }
+          }
+
+          // Off screen = missed
+          if (b.y > ch + 30) {
+            b.missed = true;
+            continue;
+          }
+
+          // Draw ball
+          ctx.save();
+          ctx.fillStyle = b.color;
+          ctx.globalAlpha = 0.9;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+          ctx.fill();
+          // Inner highlight
+          ctx.fillStyle = 'rgba(255,255,255,0.3)';
+          ctx.beginPath();
+          ctx.arc(b.x - b.r * 0.25, b.y - b.r * 0.25, b.r * 0.4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+        }
+
+        // Draw paddle (cupped hands area)
+        if (this.paddle.visible) {
+          const pw = this.paddle.rx - this.paddle.lx;
+          ctx.save();
+          ctx.strokeStyle = '#00ff88';
+          ctx.lineWidth = 4;
+          ctx.globalAlpha = 0.7;
+          ctx.beginPath();
+          ctx.arc(
+            this.paddle.lx + pw / 2,
+            this.paddle.y,
+            pw / 2,
+            0, Math.PI
+          );
+          ctx.stroke();
+          // Fill the paddle area semi-transparent
+          ctx.fillStyle = 'rgba(0, 255, 136, 0.1)';
+          ctx.fill();
+          ctx.restore();
+        }
+
+        this.animFrame = requestAnimationFrame(() => this._gameLoop());
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  DRAWING ENGINE CLASS
+    //  Allows users to draw on the canvas using their finger tip
+    // ═══════════════════════════════════════════════════════════════════
+
+    class DrawingEngine {
+      constructor(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext('2d');
+        this.enabled = false;
+        this.color = '#ff006e';
+        this.brushSize = 4;
+        this.prevPoint = null;
+        this.drawing = false; // whether finger is in drawing position
+        this.mouseDown = false; // for mouse/touch drawing fallback
+        this._initMouseDrawing(); // allow mouse/touch drawing on the canvas
+      }
+
+      /** Set up mouse & touch event listeners for drawing directly on the canvas */
+      _initMouseDrawing() {
+        const getCanvasPos = (e) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const scaleX = this.canvas.width / rect.width;
+          const scaleY = this.canvas.height / rect.height;
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+          };
+        };
+
+        this.canvas.addEventListener('mousedown', (e) => {
+          if (!this.enabled) return;
+          this.mouseDown = true;
+          this.prevPoint = getCanvasPos(e);
+        });
+
+        this.canvas.addEventListener('mousemove', (e) => {
+          if (!this.enabled || !this.mouseDown) return;
+          const pos = getCanvasPos(e);
+          this._drawLine(this.prevPoint, pos);
+          this.prevPoint = pos;
+        });
+
+        this.canvas.addEventListener('mouseup', () => {
+          this.mouseDown = false;
+          this.prevPoint = null;
+        });
+
+        this.canvas.addEventListener('mouseleave', () => {
+          this.mouseDown = false;
+          this.prevPoint = null;
+        });
+
+        // Touch support for mobile
+        this.canvas.addEventListener('touchstart', (e) => {
+          if (!this.enabled) return;
+          e.preventDefault();
+          this.mouseDown = true;
+          this.prevPoint = getCanvasPos(e);
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchmove', (e) => {
+          if (!this.enabled || !this.mouseDown) return;
+          e.preventDefault();
+          const pos = getCanvasPos(e);
+          this._drawLine(this.prevPoint, pos);
+          this.prevPoint = pos;
+        }, { passive: false });
+
+        this.canvas.addEventListener('touchend', () => {
+          this.mouseDown = false;
+          this.prevPoint = null;
+        });
+      }
+
+      /** Draw a neon line between two points */
+      _drawLine(from, to) {
+        if (!from || !to) return;
+        this.ctx.strokeStyle = this.color;
+        this.ctx.lineWidth = this.brushSize;
+        this.ctx.lineCap = 'round';
+        this.ctx.lineJoin = 'round';
+        this.ctx.shadowBlur = this.brushSize;
+        this.ctx.shadowColor = this.color;
+        this.ctx.beginPath();
+        this.ctx.moveTo(from.x, from.y);
+        this.ctx.lineTo(to.x, to.y);
+        this.ctx.stroke();
+        this.ctx.shadowBlur = 0;
+      }
+
+      /** Resize the drawing canvas to match the video dimensions */
+      resizeToVideo(width, height) {
+        if (this.canvas.width !== width || this.canvas.height !== height) {
+          // Save current drawing
+          const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+          this.canvas.width = width;
+          this.canvas.height = height;
+          this.ctx.putImageData(imageData, 0, 0);
+        }
+      }
+
+      /** Toggle drawing mode on/off */
+      toggleDrawing() {
+        this.enabled = !this.enabled;
+        const indicator = document.getElementById('drawing-indicator');
+        const tools = document.getElementById('drawing-tools');
+        const btn = document.getElementById('btn-drawing');
+        if (this.enabled) {
+          indicator.style.display = 'block';
+          tools.style.display = 'block';
+          btn.classList.add('active');
+          // Enable pointer events so mouse/touch drawing works on the canvas
+          this.canvas.style.pointerEvents = 'auto';
+          this.canvas.style.cursor = 'crosshair';
+          uiController.showToast('🎨 Drawing Mode ON — Raise index finger or use mouse to draw');
+        } else {
+          indicator.style.display = 'none';
+          tools.style.display = 'none';
+          btn.classList.remove('active');
+          this.canvas.style.pointerEvents = 'none';
+          this.canvas.style.cursor = 'default';
+          this.prevPoint = null;
+          uiController.showToast('Drawing Mode OFF');
+        }
+      }
+
+      /** Set brush color */
+      setColor(color) {
+        this.color = color;
+      }
+
+      /** Set brush size */
+      setBrushSize(size) {
+        this.brushSize = size;
+      }
+
+      /**
+       * Process hand landmarks for drawing.
+       * Drawing happens when index finger is extended and thumb is folded.
+       * Uses the index fingertip (landmark 8) position.
+       */
+      processLandmarks(landmarks, canvasWidth, canvasHeight) {
+        if (!this.enabled || !landmarks) return;
+
+        // Check if index finger is up and thumb is down → drawing pose
+        // Relaxed condition: only requires index up + middle down
+        const indexUp = landmarks[8].y < landmarks[6].y;
+        const middleDown = landmarks[12].y > landmarks[10].y;
+
+        if (indexUp && middleDown) {
+          // Mirror the x coordinate since video is flipped
+          const x = (1 - landmarks[8].x) * canvasWidth;
+          const y = landmarks[8].y * canvasHeight;
+
+          if (this.prevPoint && !this.mouseDown) {
+            this._drawLine(this.prevPoint, { x, y });
+          }
+          if (!this.mouseDown) {
+            this.prevPoint = { x, y };
+          }
+          this.drawing = true;
+        } else {
+          if (!this.mouseDown) {
+            this.prevPoint = null;
+          }
+          this.drawing = false;
+        }
+      }
+
+      /** Clear the drawing canvas */
+      clearCanvas() {
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        this.prevPoint = null;
+        uiController.showToast('🗑️ Drawing cleared');
+      }
+
+      /** Save the drawing as a PNG download */
+      saveDrawing() {
+        const link = document.createElement('a');
+        link.download = `gesture-drawing-${Date.now()}.png`;
+        link.href = this.canvas.toDataURL('image/png');
+        link.click();
+        uiController.showToast('💾 Drawing saved as PNG');
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  UI CONTROLLER CLASS
+    //  Manages all UI interactions, settings, modals, toasts, recording
+    // ═══════════════════════════════════════════════════════════════════
+
+    class UIController {
+      constructor() {
+        this.settings = this.loadSettings();
+        this.recording = false;
+        this.mediaRecorder = null;
+        this.recordedChunks = [];
+        this.sessionStart = Date.now();
+        this.gestureHistory = [];
+        this.totalGestures = 0;
+        this.confidenceData = [];
+        this.chart = null;
+        this.gestureBindings = this.loadBindings();
+        this.toastTimeout = null;
+      }
+
+      /** Load settings from localStorage or return defaults */
+      loadSettings() {
+        const saved = localStorage.getItem('gestureAI_settings');
+        const defaults = {
+          showLandmarks: true,
+          showSkeleton: true,
+          confidenceThreshold: 0.70,
+          smoothing: 0.5,
+          voiceEnabled: false,
+          voiceSpeed: 1.0,
+          voicePitch: 1.0,
+          landmarkColor: '#00d4ff',
+          skeletonColor: '#7c3aed',
+        };
+        if (saved) {
+          try {
+            return { ...defaults, ...JSON.parse(saved) };
+          } catch { return defaults; }
+        }
+        return defaults;
+      }
+
+      /** Save settings to localStorage */
+      saveSettings() {
+        localStorage.setItem('gestureAI_settings', JSON.stringify(this.settings));
+      }
+
+      /** Update a single setting */
+      updateSetting(key, value) {
+        this.settings[key] = value;
+        this.saveSettings();
+
+        // Apply voice settings immediately
+        if (key === 'voiceEnabled') audioFeedback.voiceEnabled = value;
+        if (key === 'voiceSpeed') audioFeedback.voiceSpeed = value;
+        if (key === 'voicePitch') audioFeedback.voicePitch = value;
+      }
+
+      /** Apply stored settings to UI elements */
+      applySettingsToUI() {
+        const s = this.settings;
+        document.getElementById('toggle-landmarks').checked = s.showLandmarks;
+        document.getElementById('toggle-skeleton').checked = s.showSkeleton;
+        document.getElementById('conf-threshold').value = s.confidenceThreshold;
+        document.getElementById('conf-threshold-val').textContent = s.confidenceThreshold.toFixed(2);
+        document.getElementById('smooth-factor').value = s.smoothing;
+        document.getElementById('smooth-val').textContent = s.smoothing.toFixed(1);
+        document.getElementById('toggle-voice').checked = s.voiceEnabled;
+        document.getElementById('voice-speed').value = s.voiceSpeed;
+        document.getElementById('voice-speed-val').textContent = s.voiceSpeed.toFixed(1);
+        document.getElementById('voice-pitch').value = s.voicePitch;
+        document.getElementById('voice-pitch-val').textContent = s.voicePitch.toFixed(1);
+        document.getElementById('landmark-color').value = s.landmarkColor;
+        document.getElementById('skeleton-color').value = s.skeletonColor;
+
+        audioFeedback.voiceEnabled = s.voiceEnabled;
+        audioFeedback.voiceSpeed = s.voiceSpeed;
+        audioFeedback.voicePitch = s.voicePitch;
+      }
+
+      /** Load gesture bindings from localStorage or return defaults */
+      loadBindings() {
+        const saved = localStorage.getItem('gestureAI_bindings');
+        if (saved) {
+          try { return { ...DEFAULT_BINDINGS, ...JSON.parse(saved) }; }
+          catch { return { ...DEFAULT_BINDINGS }; }
+        }
+        return { ...DEFAULT_BINDINGS };
+      }
+
+      /** Save gesture bindings to localStorage */
+      saveBindings() {
+        localStorage.setItem('gestureAI_bindings', JSON.stringify(this.gestureBindings));
+      }
+
+      /** Reset bindings to defaults */
+      resetGestureBindings() {
+        this.gestureBindings = { ...DEFAULT_BINDINGS };
+        this.saveBindings();
+        this.renderGestureCustomizer();
+        this.showToast('Gesture bindings reset to defaults');
+      }
+
+      /** Render the gesture customizer UI in the settings panel */
+      renderGestureCustomizer() {
+        const container = document.getElementById('gesture-customizer');
+        container.innerHTML = '';
+        const gestures = Object.keys(DEFAULT_BINDINGS);
+        const actions = Object.keys(ACTION_LABELS);
+
+        gestures.forEach(gesture => {
+          const row = document.createElement('div');
+          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px;';
+
+          const label = document.createElement('span');
+          label.style.cssText = 'font-size:0.75rem;white-space:nowrap;';
+          label.textContent = `${GESTURE_EMOJIS[gesture]} ${gesture}`;
+
+          const select = document.createElement('select');
+          select.style.cssText = 'font-size:0.7rem;padding:4px 8px;border-radius:6px;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--glass-border);flex:1;max-width:180px;cursor:pointer;';
+          actions.forEach(action => {
+            const opt = document.createElement('option');
+            opt.value = action;
+            opt.textContent = ACTION_LABELS[action];
+            if (this.gestureBindings[gesture] === action) opt.selected = true;
+            select.appendChild(opt);
+          });
+          select.addEventListener('change', () => {
+            this.gestureBindings[gesture] = select.value;
+            this.saveBindings();
+          });
+
+          row.appendChild(label);
+          row.appendChild(select);
+          container.appendChild(row);
+        });
+      }
+
+      /** Toggle settings drawer */
+      toggleSettings() {
+        const drawer = document.getElementById('settings-drawer');
+        const overlay = document.getElementById('settings-overlay');
+        drawer.classList.toggle('open');
+        overlay.classList.toggle('open');
+      }
+
+      /** Toggle about modal */
+      toggleAbout() {
+        document.getElementById('about-modal').classList.toggle('active');
+      }
+
+      /** Show a temporary toast notification */
+      showToast(message) {
+        // Remove any existing toast
+        const existing = document.querySelector('.toast');
+        if (existing) existing.remove();
+
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => toast.remove(), 3000);
+      }
+
+      /** Take a screenshot of the webcam canvas */
+      takeScreenshot() {
+        const overlayCanvas = document.getElementById('overlay-canvas');
+        const drawingCanvas = document.getElementById('drawing-canvas');
+        const video = document.getElementById('webcam');
+
+        // Create a composite canvas
+        const composite = document.createElement('canvas');
+        composite.width = overlayCanvas.width;
+        composite.height = overlayCanvas.height;
+        const cCtx = composite.getContext('2d');
+
+        // Draw video (mirrored)
+        cCtx.save();
+        cCtx.scale(-1, 1);
+        cCtx.drawImage(video, -composite.width, 0, composite.width, composite.height);
+        cCtx.restore();
+
+        // Draw overlay
+        cCtx.drawImage(overlayCanvas, 0, 0);
+        // Draw drawing layer
+        cCtx.drawImage(drawingCanvas, 0, 0);
+
+        const link = document.createElement('a');
+        link.download = `gesture-screenshot-${Date.now()}.png`;
+        link.href = composite.toDataURL('image/png');
+        link.click();
+        this.showToast('📸 Screenshot saved!');
+        audioFeedback.playClick();
+      }
+
+      /** Toggle canvas recording using MediaRecorder API */
+      toggleRecording() {
+        if (!this.recording) {
+          this.startRecording();
+        } else {
+          this.stopRecording();
+        }
+      }
+
+      startRecording() {
+        try {
+          const overlayCanvas = document.getElementById('overlay-canvas');
+          const video = document.getElementById('webcam');
+
+          // Create a hidden composite canvas for recording (video + landmarks)
+          this._recCanvas = document.createElement('canvas');
+          this._recCanvas.width = overlayCanvas.width;
+          this._recCanvas.height = overlayCanvas.height;
+          this._recCtx = this._recCanvas.getContext('2d');
+
+          // Composite loop: draw video + overlay onto recording canvas at 24fps
+          this._recLoop = setInterval(() => {
+            const rc = this._recCtx;
+            rc.clearRect(0, 0, this._recCanvas.width, this._recCanvas.height);
+            rc.save();
+            rc.scale(-1, 1);
+            rc.drawImage(video, -this._recCanvas.width, 0, this._recCanvas.width, this._recCanvas.height);
+            rc.restore();
+            rc.drawImage(overlayCanvas, 0, 0);
+            rc.drawImage(document.getElementById('drawing-canvas'), 0, 0);
+          }, 1000 / 24);
+
+          const stream = this._recCanvas.captureStream(24);
+          this.mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+          this.recordedChunks = [];
+
+          this.mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) this.recordedChunks.push(e.data);
+          };
+
+          this.mediaRecorder.onstop = () => {
+            clearInterval(this._recLoop);
+            const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.download = `gesture-recording-${Date.now()}.webm`;
+            link.href = url;
+            link.click();
+            URL.revokeObjectURL(url);
+            this.showToast('🎬 Recording saved!');
+          };
+
+          this.mediaRecorder.start();
+          this.recording = true;
+          document.getElementById('btn-record').classList.add('active');
+          document.getElementById('btn-record').innerHTML = '⏹️ Stop';
+          document.getElementById('recording-indicator').style.display = 'block';
+          this.showToast('⏺️ Recording started');
+        } catch (e) {
+          this.showToast('❌ Recording failed: ' + e.message);
+        }
+      }
+
+      stopRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+          this.mediaRecorder.stop();
+        }
+        this.recording = false;
+        document.getElementById('btn-record').classList.remove('active');
+        document.getElementById('btn-record').innerHTML = '⏺️ Record';
+        document.getElementById('recording-indicator').style.display = 'none';
+      }
+
+      /** Update the session timer */
+      updateSessionTime() {
+        const elapsed = Math.floor((Date.now() - this.sessionStart) / 1000);
+        const min = Math.floor(elapsed / 60);
+        const sec = elapsed % 60;
+        document.getElementById('session-time').textContent = `${min}:${sec.toString().padStart(2, '0')}`;
+      }
+
+      /** Add a gesture to the history log */
+      addGestureToHistory(gesture, confidence) {
+        this.totalGestures++;
+        document.getElementById('total-gestures').textContent = this.totalGestures;
+
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString();
+
+        this.gestureHistory.unshift({ gesture, confidence, time: timeStr });
+        if (this.gestureHistory.length > 10) this.gestureHistory.pop();
+
+        const container = document.getElementById('gesture-history');
+        const emptyMsg = document.getElementById('history-empty');
+        emptyMsg.style.display = 'none';
+
+        container.innerHTML = '';
+        this.gestureHistory.forEach(item => {
+          const el = document.createElement('div');
+          el.className = 'gesture-log-item';
+          el.innerHTML = `
+            <span>${GESTURE_EMOJIS[item.gesture] || '🤷'} ${item.gesture}</span>
+            <span style="color:var(--text-secondary);font-family:'JetBrains Mono',monospace;">${item.time}</span>
+          `;
+          container.appendChild(el);
+        });
+      }
+
+      /** Update the confidence bar UI */
+      updateConfidence(gesture, confidence) {
+        document.getElementById('conf-gesture-name').textContent = `${GESTURE_EMOJIS[gesture] || ''} ${gesture}`;
+        document.getElementById('conf-gesture-pct').textContent = `${Math.round(confidence * 100)}%`;
+        document.getElementById('confidence-fill').style.width = `${confidence * 100}%`;
+
+        // Add to chart data
+        this.confidenceData.push({ time: Date.now(), value: confidence * 100 });
+        if (this.confidenceData.length > 60) this.confidenceData.shift();
+      }
+
+      /** Initialize Chart.js confidence chart */
+      initChart() {
+        const ctx = document.getElementById('confidence-chart').getContext('2d');
+        this.chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: [],
+            datasets: [{
+              label: 'Confidence %',
+              data: [],
+              borderColor: '#7c3aed',
+              backgroundColor: 'rgba(124, 58, 237, 0.1)',
+              borderWidth: 2,
+              fill: true,
+              tension: 0.4,
+              pointRadius: 0,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 0 },
+            scales: {
+              x: {
+                display: false,
+              },
+              y: {
+                min: 0,
+                max: 100,
+                grid: { color: 'rgba(255,255,255,0.05)' },
+                ticks: { color: 'rgba(255,255,255,0.3)', font: { size: 10 } }
+              }
+            },
+            plugins: {
+              legend: { display: false }
+            }
+          }
+        });
+      }
+
+      /** Update Chart.js with latest data */
+      updateChart() {
+        if (!this.chart) return;
+        this.chart.data.labels = this.confidenceData.map((_, i) => i);
+        this.chart.data.datasets[0].data = this.confidenceData.map(d => d.value);
+        this.chart.update('none'); // 'none' mode skips animations for faster updates
+      }
+
+      /** Update tracking status indicator */
+      setStatus(status) {
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+        dot.className = 'status-dot';
+        switch (status) {
+          case 'tracking':
+            dot.classList.add('status-tracking');
+            text.textContent = 'Tracking';
+            text.style.color = '#00ff88';
+            break;
+          case 'detecting':
+            dot.classList.add('status-detecting');
+            text.textContent = 'Detecting';
+            text.style.color = '#ffcc00';
+            break;
+          default:
+            dot.classList.add('status-nohand');
+            text.textContent = 'No Hand';
+            text.style.color = '#ff3333';
+        }
+      }
+
+      /** Toggle dark/light theme */
+      toggleTheme() {
+        document.documentElement.classList.toggle('light');
+        document.documentElement.classList.toggle('dark');
+        audioFeedback.playToggle();
+        const isDark = document.documentElement.classList.contains('dark');
+        this.showToast(isDark ? '🌙 Dark Mode' : '☀️ Light Mode');
+      }
+
+      /** Show a random AI quote */
+      showRandomQuote() {
+        const quote = AI_QUOTES[Math.floor(Math.random() * AI_QUOTES.length)];
+        document.getElementById('quote-text').textContent = `"${quote.text}"`;
+        document.getElementById('quote-author').textContent = `— ${quote.author}`;
+        const el = document.getElementById('quote-display');
+        el.classList.add('active');
+        setTimeout(() => el.classList.remove('active'), 5000);
+      }
+
+      /** Create a visual gesture-ring pulse effect */
+      showGestureRing(color) {
+        const ring = document.createElement('div');
+        ring.className = 'gesture-ring';
+        ring.style.borderColor = color || 'var(--neon-blue)';
+        document.body.appendChild(ring);
+        setTimeout(() => ring.remove(), 800);
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  GESTURE DETECTOR CLASS
+    //  Uses MediaPipe Hands for 21-point landmark detection and
+    //  classifies gestures using geometric analysis of finger states
+    // ═══════════════════════════════════════════════════════════════════
+
+    class GestureDetector {
+      constructor() {
+        this.hands = null;
+        this.camera = null;
+        this.video = document.getElementById('webcam');
+        this.overlayCanvas = document.getElementById('overlay-canvas');
+        this.overlayCtx = this.overlayCanvas.getContext('2d');
+
+        this.currentGesture = 'None';
+        this.previousGesture = 'None';
+        this.gestureStableCount = 0;
+        this.gestureThreshold = 15; // frames to confirm a gesture (raised from 5 to prevent accidental triggers)
+        this.lastActionTime = 0;
+        this.actionCooldown = 4000; // ms between actions (raised from 1500 to prevent spam)
+        this.lastTriggeredGesture = 'None'; // tracks last triggered gesture to require a different one before re-triggering
+
+        this.paused = false;
+        this.demoMode = false;
+        this.demoInterval = null;
+        this.processing = false; // flag to prevent frame backpressure
+
+        // FPS tracking
+        this.frameCount = 0;
+        this.lastFpsTime = Date.now();
+        this.fps = 0;
+
+        // Smoothed landmarks for jitter reduction
+        this.smoothedLandmarks = null;
+      }
+
+      /** Initialize MediaPipe Hands */
+      async init() {
+        this.hands = new Hands({
+          locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/${file}`;
+          }
+        });
+
+        this.hands.setOptions({
+          maxNumHands: 2,
+          modelComplexity: 0,     // Lite model — 2-3x faster than complexity 1, minimal accuracy loss
+          minDetectionConfidence: 0.65,
+          minTrackingConfidence: 0.5,
+        });
+
+        this.hands.onResults((results) => this.onResults(results));
+
+        return new Promise((resolve, reject) => {
+          try {
+            navigator.mediaDevices.getUserMedia({
+              video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } }
+            }).then(stream => {
+              this.video.srcObject = stream;
+              this.video.onloadedmetadata = () => {
+                this.overlayCanvas.width = this.video.videoWidth;
+                this.overlayCanvas.height = this.video.videoHeight;
+                document.getElementById('drawing-canvas').width = this.video.videoWidth;
+                document.getElementById('drawing-canvas').height = this.video.videoHeight;
+                this.sendFrame();
+                resolve();
+              };
+            }).catch(err => {
+              console.error('Camera access denied:', err);
+              document.getElementById('camera-denied').style.display = 'flex';
+              resolve(); // still resolve, don't block app
+            });
+          } catch (e) {
+            document.getElementById('camera-denied').style.display = 'flex';
+            resolve();
+          }
+        });
+      }
+
+      /**
+       * Send a video frame to MediaPipe for processing.
+       * Uses a non-blocking pattern: if the previous frame is still being processed,
+       * we skip this frame entirely instead of waiting (which caused UI freezes).
+       */
+      sendFrame() {
+        if (this.paused || this.demoMode) {
+          requestAnimationFrame(() => this.sendFrame());
+          return;
+        }
+
+        // Skip this frame if MediaPipe is still processing the previous one
+        // This prevents backpressure from stacking awaited promises
+        if (!this.processing) {
+          this.processing = true;
+          this.hands.send({ image: this.video }).then(() => {
+            this.processing = false;
+          }).catch(() => {
+            this.processing = false;
+          });
+        }
+
+        // FPS counter
+        this.frameCount++;
+        const now = Date.now();
+        if (now - this.lastFpsTime >= 1000) {
+          this.fps = this.frameCount;
+          this.frameCount = 0;
+          this.lastFpsTime = now;
+          document.getElementById('fps-display').textContent = this.fps;
+        }
+
+        requestAnimationFrame(() => this.sendFrame());
+      }
+
+      /**
+       * Process MediaPipe results: draw landmarks, detect gestures, trigger actions.
+       * This is the core AI/ML processing pipeline that runs per-frame.
+       *
+       * @param {Object} results - MediaPipe Hands results containing multiHandLandmarks and multiHandedness
+       */
+      onResults(results) {
+        const ctx = this.overlayCtx;
+        const w = this.overlayCanvas.width;
+        const h = this.overlayCanvas.height;
+
+        // Clear the overlay (transparent — the <video> element shows the feed underneath)
+        ctx.clearRect(0, 0, w, h);
+
+        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
+          uiController.setStatus('nohand');
+          document.getElementById('hand-label-display').textContent = 'No Hand';
+          const gestureEl = document.getElementById('current-gesture');
+          gestureEl.style.opacity = '0';
+          this.currentGesture = 'None';
+          this.gestureStableCount = 0;
+          return;
+        }
+
+        // Process each detected hand
+        let detectedGesture = 'None';
+        let maxConfidence = 0;
+        const handLabels = [];
+        let bothPalmsOpen = true;
+
+        results.multiHandLandmarks.forEach((landmarks, idx) => {
+          const handedness = results.multiHandedness[idx];
+          // Note: MediaPipe flips handedness for mirrored video
+          const label = handedness.label === 'Right' ? 'Left' : 'Right';
+          const confidence = handedness.score;
+          handLabels.push(`${label} (${Math.round(confidence * 100)}%)`);
+
+          // Apply smoothing to reduce jitter
+          const smoothed = this.smoothLandmarks(landmarks, idx);
+
+          // Choose colors for left vs right hand
+          const isLeft = label === 'Left';
+          const landmarkColor = isLeft ? uiController.settings.landmarkColor : '#ff006e';
+          const skeletonColor = isLeft ? uiController.settings.skeletonColor : '#ff8c00';
+
+          // Draw skeleton connections with neon glow
+          if (uiController.settings.showSkeleton) {
+            this.drawSkeleton(ctx, smoothed, w, h, skeletonColor);
+          }
+
+          // Draw landmarks with neon glow
+          if (uiController.settings.showLandmarks) {
+            this.drawLandmarks(ctx, smoothed, w, h, landmarkColor);
+          }
+
+          // Classify gesture from this hand's landmarks
+          const { gesture, conf } = this.classifyGesture(smoothed);
+          if (conf > maxConfidence) {
+            detectedGesture = gesture;
+            maxConfidence = conf;
+          }
+
+          // Check if this hand is open palm (for two-hand reset gesture)
+          const fingers = this.getFingerStates(smoothed);
+          if (!fingers.every(f => f)) bothPalmsOpen = false;
+
+          // Process drawing with this hand's landmarks
+          drawingEngine.processLandmarks(smoothed, w, h);
+        });
+
+        // Two-hand gesture: both open palms → reset everything
+        if (results.multiHandLandmarks.length === 2 && bothPalmsOpen) {
+          this.resetAll();
+        }
+
+        // ── Two-hand gesture detection ──
+        if (results.multiHandLandmarks.length === 2) {
+          const hand0 = this.smoothLandmarks(results.multiHandLandmarks[0], 0);
+          const hand1 = this.smoothLandmarks(results.multiHandLandmarks[1], 1);
+          const f0 = this.getFingerStates(hand0);
+          const f1 = this.getFingerStates(hand1);
+
+          // Heart Hands: both hands form a heart shape
+          // Detect: thumbs extended + index extended on both, tips close together
+          const thumb0Tip = hand0[4];
+          const thumb1Tip = hand1[4];
+          const index0Tip = hand0[8];
+          const index1Tip = hand1[8];
+          const thumbDist = Math.sqrt(
+            Math.pow(thumb0Tip.x - thumb1Tip.x, 2) + Math.pow(thumb0Tip.y - thumb1Tip.y, 2)
+          );
+          const indexDist = Math.sqrt(
+            Math.pow(index0Tip.x - index1Tip.x, 2) + Math.pow(index0Tip.y - index1Tip.y, 2)
+          );
+          // Both thumbs and both index fingers close together = heart shape
+          if (thumbDist < 0.12 && indexDist < 0.12 && f0[0] && f1[0]) {
+            detectedGesture = 'Heart Hands';
+            maxConfidence = 0.85;
+          }
+
+          // Cupped Hands: both palms facing up, fingers curled, wrists above tips
+          // Wrist (0) y < avg fingertip y for each hand
+          const tips0Avg = (hand0[8].y + hand0[12].y + hand0[16].y + hand0[20].y) / 4;
+          const tips1Avg = (hand1[8].y + hand1[12].y + hand1[16].y + hand1[20].y) / 4;
+          const wrist0Above = hand0[0].y < tips0Avg;
+          const wrist1Above = hand1[0].y < tips1Avg;
+          const ext0 = f0.filter(f => f).length;
+          const ext1 = f1.filter(f => f).length;
+          // Both wrists above fingertips + fingers mostly curled (0-2 extended)
+          if (wrist0Above && wrist1Above && ext0 <= 2 && ext1 <= 2
+              && detectedGesture !== 'Heart Hands') {
+            detectedGesture = 'Cupped Hands';
+            maxConfidence = 0.84;
+            // Pass hand positions to ball game for paddle tracking
+            if (ballGame && ballGame.running) {
+              const w = this.overlayCanvas.width;
+              const h = this.overlayCanvas.height;
+              const lx = (1 - Math.max(hand0[0].x, hand1[0].x)) * w;
+              const rx = (1 - Math.min(hand0[0].x, hand1[0].x)) * w;
+              const py = ((hand0[0].y + hand1[0].y) / 2) * h;
+              ballGame.updatePaddle(lx, rx, py);
+            }
+          }
+        }
+
+        // Update hand label display
+        document.getElementById('hand-label-display').innerHTML = handLabels.join(' | ');
+
+        // Update status
+        if (detectedGesture !== 'None') {
+          uiController.setStatus('tracking');
+        } else {
+          uiController.setStatus('detecting');
+        }
+
+        // Gesture stability check: require N consecutive frames of the same gesture
+        if (detectedGesture === this.currentGesture) {
+          this.gestureStableCount++;
+        } else {
+          this.currentGesture = detectedGesture;
+          this.gestureStableCount = 1;
+        }
+
+        // When user removes their hand (None), reset the last triggered gesture
+        // so they can perform the same gesture again after pausing
+        if (detectedGesture === 'None') {
+          this.lastTriggeredGesture = 'None';
+        }
+
+        // Update gesture display
+        const gestureEl = document.getElementById('current-gesture');
+        if (detectedGesture !== 'None') {
+          gestureEl.textContent = `${GESTURE_EMOJIS[detectedGesture] || ''} ${detectedGesture}`;
+          gestureEl.style.opacity = '1';
+        } else {
+          gestureEl.style.opacity = '0';
+        }
+
+        // Update confidence UI
+        uiController.updateConfidence(detectedGesture !== 'None' ? detectedGesture : '—', maxConfidence);
+
+        // Suppress gesture action triggering when drawing mode is active
+        // (prevents Pointing Up from scrolling while the user is trying to draw)
+        if (drawingEngine.enabled) {
+          // Still show the detected gesture in UI but do NOT fire any action
+          return;
+        }
+
+        // Trigger action if:
+        // 1. Gesture has been stable for N frames
+        // 2. It's not "None"
+        // 3. Cooldown period has passed
+        // 4. This gesture is DIFFERENT from the last triggered one
+        //    (forces user to switch gestures or remove hand before re-triggering)
+        if (this.gestureStableCount === this.gestureThreshold && detectedGesture !== 'None') {
+          const now = Date.now();
+          const isDifferentGesture = detectedGesture !== this.lastTriggeredGesture;
+          if (now - this.lastActionTime > this.actionCooldown && isDifferentGesture) {
+            this.lastActionTime = now;
+            this.lastTriggeredGesture = detectedGesture;
+            this.triggerAction(detectedGesture, maxConfidence);
+          }
+        }
+      }
+
+      /**
+       * Smooth landmarks using exponential moving average to reduce jitter.
+       * The smoothing factor is configurable via settings.
+       */
+      smoothLandmarks(landmarks, handIdx) {
+        if (!this.smoothedLandmarks) this.smoothedLandmarks = {};
+        const key = `hand_${handIdx}`;
+        const alpha = 1 - uiController.settings.smoothing;
+
+        if (!this.smoothedLandmarks[key]) {
+          this.smoothedLandmarks[key] = landmarks.map(l => ({ x: l.x, y: l.y, z: l.z }));
+          return this.smoothedLandmarks[key];
+        }
+
+        const smoothed = this.smoothedLandmarks[key];
+        for (let i = 0; i < landmarks.length; i++) {
+          smoothed[i].x = smoothed[i].x * (1 - alpha) + landmarks[i].x * alpha;
+          smoothed[i].y = smoothed[i].y * (1 - alpha) + landmarks[i].y * alpha;
+          smoothed[i].z = smoothed[i].z * (1 - alpha) + landmarks[i].z * alpha;
+        }
+
+        return smoothed;
+      }
+
+      /**
+       * Draw hand skeleton connections with neon glow effect.
+       * Uses a single batched path for performance instead of per-segment shadowBlur.
+       */
+      drawSkeleton(ctx, landmarks, w, h, color) {
+        // Draw glow layer once (thicker, semi-transparent)
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 7;
+        ctx.globalAlpha = 0.3;
+        ctx.beginPath();
+        HAND_CONNECTIONS.forEach(([start, end]) => {
+          ctx.moveTo((1 - landmarks[start].x) * w, landmarks[start].y * h);
+          ctx.lineTo((1 - landmarks[end].x) * w, landmarks[end].y * h);
+        });
+        ctx.stroke();
+
+        // Draw crisp line on top
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        HAND_CONNECTIONS.forEach(([start, end]) => {
+          ctx.moveTo((1 - landmarks[start].x) * w, landmarks[start].y * h);
+          ctx.lineTo((1 - landmarks[end].x) * w, landmarks[end].y * h);
+        });
+        ctx.stroke();
+      }
+
+      /**
+       * Draw 21 hand landmarks as neon dots.
+       * Batched into a single path per size category for performance.
+       */
+      drawLandmarks(ctx, landmarks, w, h, color) {
+        // Glow layer
+        ctx.fillStyle = color;
+        ctx.globalAlpha = 0.35;
+        landmarks.forEach((lm, idx) => {
+          const x = (1 - lm.x) * w;
+          const y = lm.y * h;
+          const size = FINGER_TIPS.includes(idx) ? 10 : 7;
+          ctx.beginPath();
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Crisp dots on top
+        ctx.globalAlpha = 1;
+        landmarks.forEach((lm, idx) => {
+          const x = (1 - lm.x) * w;
+          const y = lm.y * h;
+          const size = FINGER_TIPS.includes(idx) ? 5 : 3;
+          ctx.beginPath();
+          ctx.arc(x, y, size, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      /**
+       * Get the state of each finger (extended or folded).
+       * Returns an array of 5 booleans: [thumb, index, middle, ring, pinky]
+       *
+       * Thumb uses a different check (x-axis based lateral movement),
+       * while other fingers compare tip.y vs pip.y.
+       */
+      getFingerStates(landmarks) {
+        const fingers = [];
+
+        // Thumb: check if thumb tip is laterally extended away from palm
+        // Compare x-distance from thumb tip (4) to thumb IP (3) relative to wrist (0)
+        const thumbTip = landmarks[4];
+        const thumbIP = landmarks[3];
+        const thumbMCP = landmarks[2];
+        const wrist = landmarks[0];
+
+        // Thumb is "up" if the tip is further from the palm center than the IP joint
+        const palmCenterX = (landmarks[0].x + landmarks[5].x + landmarks[17].x) / 3;
+        const thumbExtended = Math.abs(thumbTip.x - palmCenterX) > Math.abs(thumbIP.x - palmCenterX);
+        fingers.push(thumbExtended);
+
+        // Other 4 fingers: tip is above (lower y) the PIP joint
+        for (let i = 1; i < 5; i++) {
+          const tipIdx = FINGER_TIPS[i];
+          const pipIdx = FINGER_PIPS[i];
+          fingers.push(landmarks[tipIdx].y < landmarks[pipIdx].y);
+        }
+
+        return fingers;
+      }
+
+      /**
+       * Classify the current hand pose into one of 12 recognized gestures.
+       * Uses geometric analysis of finger states and relative positions.
+       *
+       * The classification is rule-based (no ML model needed for gesture recognition),
+       * making it fast and deterministic. Confidence is based on how well
+       * the landmarks match the expected pattern.
+       *
+       * @returns {{ gesture: string, conf: number }} gesture name and confidence
+       */
+      classifyGesture(landmarks) {
+        const fingers = this.getFingerStates(landmarks);
+        const [thumb, index, middle, ring, pinky] = fingers;
+        const extendedCount = fingers.filter(f => f).length;
+
+        // ── Open Palm: all 5 fingers extended ──
+        if (thumb && index && middle && ring && pinky) {
+          return { gesture: 'Open Palm', conf: 0.92 };
+        }
+
+        // ── Fist: all fingers curled ──
+        if (!thumb && !index && !middle && !ring && !pinky) {
+          return { gesture: 'Fist', conf: 0.90 };
+        }
+
+        // ── Peace Sign: index + middle up, others down ──
+        if (!thumb && index && middle && !ring && !pinky) {
+          return { gesture: 'Peace Sign', conf: 0.88 };
+        }
+
+        // ── Thumbs Up: only thumb extended, all fingers curled ──
+        // Also check thumb tip is above (higher than) the index MCP
+        if (thumb && !index && !middle && !ring && !pinky) {
+          const thumbAbove = landmarks[4].y < landmarks[5].y;
+          if (thumbAbove) {
+            return { gesture: 'Thumbs Up', conf: 0.87 };
+          }
+        }
+
+        // ── Pointing Up: only index finger extended, tip ABOVE PIP ──
+        if (!thumb && index && !middle && !ring && !pinky) {
+          // Confirm index tip is above the wrist (pointing up, not down)
+          if (landmarks[8].y < landmarks[0].y) {
+            return { gesture: 'Pointing Up', conf: 0.88 };
+          }
+        }
+
+        // ── Pointing Down: only index finger extended, tip BELOW wrist ──
+        if (!thumb && !middle && !ring && !pinky) {
+          // Index tip is below PIP and below the wrist
+          const indexTipBelow = landmarks[8].y > landmarks[6].y;
+          const belowWrist = landmarks[8].y > landmarks[0].y;
+          if (indexTipBelow && belowWrist) {
+            return { gesture: 'Pointing Down', conf: 0.86 };
+          }
+        }
+
+        // ── OK Sign: thumb and index form a circle, others extended ──
+        // Check distance between thumb tip (4) and index tip (8)
+        {
+          const dx = landmarks[4].x - landmarks[8].x;
+          const dy = landmarks[4].y - landmarks[8].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 0.06 && middle && ring && pinky) {
+            return { gesture: 'OK Sign', conf: 0.85 };
+          }
+        }
+
+        // ── Call Me (Shaka): thumb + pinky extended, others curled ──
+        if (thumb && !index && !middle && !ring && pinky) {
+          return { gesture: 'Call Me', conf: 0.86 };
+        }
+
+        return { gesture: 'None', conf: 0 };
+      }
+
+      /**
+       * Execute the action bound to the recognized gesture.
+       * Looks up the action in the customizable gesture bindings.
+       */
+      triggerAction(gesture, confidence) {
+        audioFeedback.initTone(); // init audio context on first gesture
+        const action = uiController.gestureBindings[gesture] || DEFAULT_BINDINGS[gesture];
+        if (!action) return;
+
+        // Log to history
+        uiController.addGestureToHistory(gesture, confidence);
+
+        // Speak gesture name
+        audioFeedback.speak(gesture);
+
+        // Visual feedback ring
+        uiController.showGestureRing(
+          gesture === 'Open Palm' ? '#00ff88' :
+          gesture === 'Fist' ? '#ff3333' :
+          gesture === 'Peace Sign' ? '#00d4ff' :
+          gesture === 'OK Sign' ? '#facc15' :
+          '#7c3aed'
+        );
+
+        // Execute the bound action
+        switch (action) {
+          case 'screenshot':
+            uiController.takeScreenshot();
+            particleSystem.sparkleBurst(undefined, undefined, '#00d4ff');
+            break;
+
+          case 'success':
+            audioFeedback.playSuccess();
+            particleSystem.confettiRain(80);
+            uiController.showToast('🎉 Success! Great job!');
+            break;
+
+          case 'pause_resume':
+            this.paused = !this.paused;
+            if (this.paused) {
+              uiController.showToast('⏸️ Feed Paused — show Fist again to resume');
+            } else {
+              uiController.showToast('▶️ Feed Resumed');
+              this.sendFrame();
+            }
+            audioFeedback.playClick();
+            break;
+
+          case 'particles':
+            particleSystem.explosion();
+            audioFeedback.playBurst();
+            uiController.showToast('💥 Particle Explosion!');
+            break;
+
+          case 'scroll_up':
+            window.scrollBy({ top: -300, behavior: 'smooth' });
+            audioFeedback.playClick();
+            uiController.showToast('👆 Scrolling Up');
+            break;
+
+          case 'scroll_down':
+            window.scrollBy({ top: 300, behavior: 'smooth' });
+            audioFeedback.playClick();
+            uiController.showToast('👇 Scrolling Down');
+            break;
+
+          case 'toggle_theme':
+            uiController.toggleTheme();
+            break;
+
+          case 'confetti':
+            particleSystem.confettiRain(150);
+            audioFeedback.playSuccess();
+            uiController.showToast('🎊 Confetti Rain!');
+            break;
+
+          case 'heart_flood':
+            particleSystem.heartFlood(220);
+            audioFeedback.playSuccess();
+            uiController.showToast('💕 Heart Flood!');
+            break;
+
+          case 'ball_game':
+            if (ballGame && !ballGame.running) {
+              ballGame.start();
+              uiController.showToast('🎮 Ball Game started! Cup your hands to catch!');
+            } else if (ballGame && ballGame.running) {
+              ballGame.stop();
+            }
+            audioFeedback.playClick();
+            break;
+        }
+      }
+
+      /** Show the Thank You Easter egg with floating hearts */
+      showThankYou() {
+        const overlay = document.getElementById('thankyou-overlay');
+        overlay.classList.add('active');
+        audioFeedback.playSuccess();
+
+        // Spawn floating hearts
+        const hearts = ['❤️', '🧡', '💛', '💚', '💙', '💜', '🤍', '💖', '💗', '💓'];
+        for (let i = 0; i < 35; i++) {
+          setTimeout(() => {
+            const heart = document.createElement('div');
+            heart.className = 'floating-heart';
+            heart.textContent = hearts[Math.floor(Math.random() * hearts.length)];
+            heart.style.left = Math.random() * 100 + 'vw';
+            heart.style.bottom = '-40px';
+            heart.style.fontSize = (1.2 + Math.random() * 2) + 'rem';
+            heart.style.animationDuration = (3 + Math.random() * 3) + 's';
+            document.body.appendChild(heart);
+            setTimeout(() => heart.remove(), 6000);
+          }, i * 120);
+        }
+
+        // Auto-dismiss after 5 seconds
+        setTimeout(() => {
+          overlay.classList.remove('active');
+        }, 5000);
+      }
+
+      /** Reset all states */
+      resetAll() {
+        drawingEngine.clearCanvas();
+        this.paused = false;
+        uiController.totalGestures = 0;
+        document.getElementById('total-gestures').textContent = '0';
+        uiController.gestureHistory = [];
+        document.getElementById('gesture-history').innerHTML = '';
+        document.getElementById('history-empty').style.display = 'block';
+        uiController.confidenceData = [];
+        uiController.sessionStart = Date.now();
+        uiController.showToast('🔄 Everything reset! (Both palms detected)');
+        particleSystem.explosion();
+      }
+
+      /**
+       * Toggle Demo Mode: simulates gesture detection without a camera.
+       * Useful for recruiters reviewing the portfolio without webcam access.
+       */
+      toggleDemoMode() {
+        this.demoMode = !this.demoMode;
+        const btn = document.getElementById('btn-demo-mode');
+
+        if (this.demoMode) {
+          btn.classList.add('active');
+          btn.innerHTML = '🎭 Demo ON';
+          uiController.showToast('🎭 Demo Mode — Simulating gestures');
+          this.startDemoSimulation();
+        } else {
+          btn.classList.remove('active');
+          btn.innerHTML = '🎭 Demo';
+          uiController.showToast('Demo Mode OFF');
+          clearInterval(this.demoInterval);
+        }
+      }
+
+      /** Run a demo simulation that cycles through gestures */
+      startDemoSimulation() {
+        const gestures = Object.keys(DEFAULT_BINDINGS);
+        let idx = 0;
+
+        this.demoInterval = setInterval(() => {
+          if (!this.demoMode) {
+            clearInterval(this.demoInterval);
+            return;
+          }
+
+          const gesture = gestures[idx % gestures.length];
+          const confidence = 0.75 + Math.random() * 0.2;
+
+          // Update UI as if a real gesture was detected
+          document.getElementById('current-gesture').textContent = `${GESTURE_EMOJIS[gesture]} ${gesture}`;
+          document.getElementById('current-gesture').style.opacity = '1';
+          uiController.setStatus('tracking');
+          uiController.updateConfidence(gesture, confidence);
+
+          // Trigger the action
+          this.triggerAction(gesture, confidence);
+
+          idx++;
+        }, 3000);
+      }
+    }
+
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  INITIALIZATION AND BOOT SEQUENCE
+    // ═══════════════════════════════════════════════════════════════════
+
+    // Global instances
+    let audioFeedback, particleSystem, drawingEngine, uiController, gestureDetector, ballGame;
+
+    async function boot() {
+      const loadingBar = document.getElementById('loading-bar');
+      loadingBar.style.width = '10%';
+
+      // Instantiate all modules
+      audioFeedback = new AudioFeedback();
+      loadingBar.style.width = '20%';
+
+      particleSystem = new ParticleSystem('particle-canvas');
+      loadingBar.style.width = '30%';
+
+      ballGame = new BallGame('particle-canvas'); // shares the particle canvas
+      loadingBar.style.width = '35%';
+
+      drawingEngine = new DrawingEngine('drawing-canvas');
+      loadingBar.style.width = '40%';
+
+      uiController = new UIController();
+      loadingBar.style.width = '50%';
+
+      gestureDetector = new GestureDetector();
+      loadingBar.style.width = '60%';
+
+      // Apply saved settings
+      uiController.applySettingsToUI();
+      uiController.renderGestureCustomizer();
+      loadingBar.style.width = '70%';
+
+      // Initialize Chart.js
+      uiController.initChart();
+      loadingBar.style.width = '80%';
+
+      // Initialize gesture detector (webcam + MediaPipe)
+      await gestureDetector.init();
+      loadingBar.style.width = '100%';
+
+      // Session timer
+      setInterval(() => uiController.updateSessionTime(), 1000);
+
+      // Chart update interval (1s instead of 500ms to save CPU)
+      setInterval(() => uiController.updateChart(), 1000);
+
+      // Hide loading screen, show app
+      setTimeout(() => {
+        document.getElementById('loading-screen').classList.add('hidden');
+        document.getElementById('app').style.display = 'block';
+      }, 500);
+    }
+
+    // Boot when DOM is ready
+    window.addEventListener('DOMContentLoaded', boot);
+  </script>
+</body>
+</html>
