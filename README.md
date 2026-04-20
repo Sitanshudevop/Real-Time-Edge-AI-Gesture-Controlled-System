@@ -43,3 +43,6 @@ Analytics: Recharts (for confidence tracking)
 APIs: Web Speech API (Voice), MediaDevices API (Camera)
 
 Deployment: Netlify
+
+🛡 Privacy First
+Because this application uses Edge AI, the camera feed is processed locally using your GPU/CPU. No video or image data is ever uploaded or stored on a server.
