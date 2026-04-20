@@ -34,14 +34,19 @@ Confidence Over Time: Integrated charts to visualize the model's accuracy during
 Voice Integration: Utilizes the Web Speech API for multimodal feedback.
 
 🛠 Tech Stack
+
 Core AI / ML :
 TechnologyVersionRoleMediaPipe HandsLatest (CDN)21-point 3D hand landmark detection via WASM + WebGLTensorFlow.jsLatest (CDN)ML runtime, tensor operations, custom model inference
+
 Web APIs (Browser-Native) :
 APIRolegetUserMedia() / MediaDevices APIWebcam access and video stream captureWeb Speech APIVoice feedback — speaks detected gesture name aloudMediaRecorder APIRecords the gesture session as a .webm videoHTML5 Canvas APIRenders landmarks, skeleton, particles, drawing overlaylocalStorage APIPersists settings, theme, and future custom gesturesRequestAnimationFrame60fps render loop synchronization
+
 UI & Visualization : 
 TechnologyRoleTailwind CSS (CDN)Utility-first styling, dark theme, responsive layoutChart.js (CDN)Live confidence score graph over timeHTML5 CanvasParticle system, drawing engine, landmark overlay
+
 Audio : 
 TechnologyRoleTone.js (CDN)Synthesized sound effects triggered by gesturesWeb Audio APIUnderlying audio context for real-time audio generation
+
 Deployment : 
 PlatformRoleNetlifyStatic site hosting with instant CDN deliveryGitHubVersion control and source repository
 
